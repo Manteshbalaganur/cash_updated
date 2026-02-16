@@ -1,14 +1,9 @@
 "use client";
 
-import React from "react";
-
-import {
-  superUserStats,
-  assetLiabilityTrend,
-  assetDistribution,
-  liabilitiesBreakdown,
-  financialHealthScores,
-} from "@/lib/mock-data";
+import React, { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@/lib/user-context";
+import { fetchWithAuth } from "@/lib/api-client";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   Line,
@@ -23,6 +18,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { toast } from "sonner";
 
 const statIcons = [
   // Net Worth - blue
@@ -69,9 +65,106 @@ const statIcons = [
   },
 ];
 
-const liabilityColors = ["bg-blue-600", "bg-red-500", "bg-red-400"];
-
 export function SuperDashboard() {
+  const { userId } = useAuth();
+  const { isSuper } = useUser();
+  const [loading, setLoading] = useState(true);
+
+  // Real Data States
+  const [stats, setStats] = useState<any[]>([]);
+  const [assetDistribution, setAssetDistribution] = useState<any[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [liabilities, setLiabilities] = useState<any[]>([]);
+  const [healthScore, setHealthScore] = useState(0);
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+
+      // 1. Fetch Wallets (Assets)
+      const wallets = await fetchWithAuth("/api/wallets/{userId}", userId, {}, isSuper);
+      const totalAssets = (wallets.normal || 0) + (wallets.cashback || 0) + (wallets.emergency || 0);
+
+      // 2. Fetch Summary (Income/Trend)
+      const summary = await fetchWithAuth("/api/dashboard/summary/{userId}", userId, {}, isSuper);
+
+      // 3. Fetch Analytics (Trend Chart)
+      const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId, {}, isSuper);
+
+      // --- CALCULATIONS ---
+
+      // Liabilities -> currently 0 as we don't track debt yet
+      const totalLiabilities = 0;
+
+      // Net Worth
+      const netWorth = totalAssets - totalLiabilities;
+
+      // Health Score (Simple algorithm based on savings rate)
+      // Savings Rate 20% -> 5/10. 50% -> 10/10.
+      const savingsRate = summary.savings_rate || 0;
+      const calcScore = Math.min(Math.max((savingsRate / 5), 1), 10).toFixed(1);
+      setHealthScore(Number(calcScore));
+
+      // Stats Array
+      setStats([
+        {
+          label: "Net Worth",
+          value: `$${netWorth.toLocaleString()}`,
+          change: "Total Equity",
+          changeType: "neutral",
+        },
+        {
+          label: "Total Assets",
+          value: `$${totalAssets.toLocaleString()}`,
+          change: "Liquid & Invested",
+          changeType: "positive",
+        },
+        {
+          label: "Total Liabilities",
+          value: `$${totalLiabilities.toLocaleString()}`,
+          change: "No active debts",
+          changeType: "positive",
+        },
+        {
+          label: "Financial Health Score",
+          value: calcScore,
+          change: "Based on savings",
+          changeType: "positive",
+        },
+      ]);
+
+      // Asset Distribution (Wallets)
+      setAssetDistribution([
+        { name: "Liquid Cash", value: wallets.normal || 0, color: "#4F46E5" }, // Normal -> Blue
+        { name: "Emergency Fund", value: wallets.emergency || 0, color: "#10B981" }, // Emergency -> Green
+        { name: "Investments", value: wallets.cashback || 0, color: "#F59E0B" }, // Cashback -> Yellow
+      ].filter(i => i.value > 0)); // Only show non-zero
+
+      // Trend Data (Income vs Expense from Analytics)
+      // Map analytics.incomeVsExpense to chart format
+      const trends = (analytics.incomeVsExpense || []).map((m: any) => ({
+        month: m.month,
+        assets: m.income, // Temporary mapping: Income ~ Growth potential
+        liabilities: m.expense, // Expense ~ Outflow
+        net: m.income - m.expense
+      }));
+      setTrendData(trends);
+
+      setLiabilities([]); // No liabilities breakdown yet
+
+    } catch (e) {
+      console.error("SuperDashboard load error", e);
+      toast.error("Failed to load advanced data");
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, isSuper]);
+
+  useEffect(() => {
+    if (userId) loadData();
+  }, [userId, loadData]);
+
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -81,47 +174,26 @@ export function SuperDashboard() {
 
       {/* Stat Cards */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {superUserStats.map((stat, i) => (
+        {loading ? Array(4).fill(0).map((_, i) => (
+          <div key={i} className="h-32 animate-pulse rounded-xl bg-card border border-border" />
+        )) : stats.map((stat, i) => (
           <div
             key={stat.label}
             className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-sm"
           >
             <div className="flex items-center justify-between">
-              <div
-                className={`flex h-11 w-11 items-center justify-center rounded-lg ${statIcons[i].bg}`}
-              >
+              <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${statIcons[i].bg}`}>
                 {statIcons[i].icon}
               </div>
-              {stat.label === "Financial Health Score" ? (
-                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-                  Excellent
-                </span>
-              ) : stat.change ? (
-                <span
-                  className={`text-xs font-medium ${
-                    stat.changeType === "positive"
-                      ? "text-green-600"
-                      : stat.changeType === "negative"
-                        ? "text-red-500"
-                        : "text-muted-foreground"
-                  }`}
-                >
-                  {stat.changeType === "positive" && "\u2197 "}
-                  {stat.changeType === "negative" && "\u2198 "}
-                  {stat.change}
-                </span>
-              ) : null}
+              <span className={`text-xs font-medium text-muted-foreground`}>
+                {stat.change}
+              </span>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{stat.label}</p>
               <p className="text-2xl font-bold text-foreground">
                 {stat.value}
-                {stat.label === "Financial Health Score" && (
-                  <span className="text-base font-normal text-muted-foreground">
-                    /10{" "}
-                    <span className="text-xs">average</span>
-                  </span>
-                )}
+                {stat.label === "Financial Health Score" && <span className="text-base font-normal text-muted-foreground">/10</span>}
               </p>
             </div>
           </div>
@@ -130,101 +202,63 @@ export function SuperDashboard() {
 
       {/* Charts Row */}
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Asset vs Liability Trend */}
+        {/* Income vs Expense Trend (Proxy for Asset Growth) */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 text-lg font-semibold text-foreground">
-            Asset vs Liability Trend
+            Monthly Cash Flow Trend
           </h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={assetLiabilityTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 20% 92%)" />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12, fill: "hsl(220 10% 45%)" }}
-              />
-              <YAxis
-                tick={{ fontSize: 12, fill: "hsl(220 10% 45%)" }}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid hsl(220 20% 90%)",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="assets"
-                stroke="#10B981"
-                strokeWidth={2}
-                dot={{ r: 5, fill: "#10B981" }}
-                name="assets"
-              />
-              <Line
-                type="monotone"
-                dataKey="liabilities"
-                stroke="#EF4444"
-                strokeWidth={2}
-                dot={{ r: 5, fill: "#EF4444" }}
-                name="liabilities"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {loading ? <div className="h-[280px] animate-pulse bg-muted rounded-lg" /> : (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip contentStyle={{ borderRadius: "8px" }} />
+                <Legend />
+                <Line type="monotone" dataKey="assets" name="Income" stroke="#10B981" strokeWidth={2} />
+                <Line type="monotone" dataKey="liabilities" name="Expenses" stroke="#EF4444" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+          {trendData.length === 0 && !loading && <p className="text-center text-sm text-muted-foreground p-4">Not enough data to show trend.</p>}
         </div>
 
-        {/* Asset Distribution */}
+        {/* Asset Distribution (Wallet Allocation) */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 text-lg font-semibold text-foreground">
-            Asset Distribution
+            Liquid Asset Allocation
           </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={assetDistribution}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="value"
-                nameKey="name"
-                paddingAngle={2}
-              >
-                {assetDistribution.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value: number) => [
-                  `$${value.toLocaleString()}`,
-                  "",
-                ]}
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid hsl(220 20% 90%)",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {loading ? <div className="h-[200px] animate-pulse bg-muted rounded-lg" /> : (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={assetDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  dataKey="value"
+                  nameKey="name"
+                  paddingAngle={2}
+                >
+                  {assetDistribution.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, ""]} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+          {!loading && assetDistribution.length === 0 && <p className="text-center text-sm text-muted-foreground">Add funds to wallets to see allocation.</p>}
+
           <div className="mt-3 flex flex-col gap-2">
             {assetDistribution.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between text-sm"
-              >
+              <div key={item.name} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2 text-foreground">
-                  <span
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
                   {item.name}
                 </div>
-                <span className="font-medium text-foreground">
-                  ${(item.value / 1000).toFixed(0)}k
-                </span>
+                <span className="font-medium text-foreground">${item.value.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -238,142 +272,44 @@ export function SuperDashboard() {
           <h3 className="mb-5 text-lg font-semibold text-foreground">
             Liabilities Breakdown
           </h3>
-          <div className="flex flex-col gap-5">
-            {liabilitiesBreakdown.map((item, idx) => (
-              <div key={item.name}>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-sm text-foreground">{item.name}</span>
-                  <span className="text-sm font-semibold text-foreground">
-                    ${item.amount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full rounded-full bg-muted">
-                  <div
-                    className={`h-2.5 rounded-full ${liabilityColors[idx]}`}
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-            <div className="mt-1 flex items-center justify-between border-t border-border pt-4">
-              <span className="font-semibold text-foreground">
-                Total Liabilities
-              </span>
-              <span className="text-lg font-bold text-foreground">$40,000</span>
-            </div>
+          {/* Empty State for now */}
+          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+            <svg className="mb-3 h-10 w-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <p>No active liabilities detected.</p>
+            <p className="text-xs">Great job keeping debt low!</p>
+          </div>
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+            <span className="font-semibold text-foreground">Total Liabilities</span>
+            <span className="text-lg font-bold text-foreground">$0.00</span>
           </div>
         </div>
 
         {/* Risk Profile */}
         <div className="overflow-hidden rounded-xl bg-gradient-to-br from-slate-800 via-slate-700 to-purple-900 p-6 text-white shadow-lg">
           <div className="mb-1 flex items-center gap-2">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
             <h3 className="text-lg font-semibold">Risk Profile</h3>
           </div>
-          <p className="mb-5 text-sm text-gray-300">Moderate</p>
+          <p className="mb-5 text-sm text-gray-300">
+            {healthScore > 8 ? "Conservative (Healthy)" : healthScore > 5 ? "Moderate" : "Aggressive (Needs Audit)"}
+          </p>
 
-          {/* Recommended Allocation Bar */}
           <div className="mb-5">
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              Recommended Allocation
-            </p>
-            <div className="flex h-8 w-full overflow-hidden rounded-lg">
-              <div
-                className="flex items-center justify-center bg-blue-500 text-xs font-medium"
-                style={{ width: "45%" }}
-              >
-                45
-              </div>
-              <div
-                className="flex items-center justify-center bg-green-500 text-xs font-medium"
-                style={{ width: "30%" }}
-              >
-                30
-              </div>
-              <div
-                className="flex items-center justify-center bg-yellow-500 text-xs font-medium text-yellow-900"
-                style={{ width: "10%" }}
-              >
-                10
-              </div>
-              <div
-                className="flex items-center justify-center bg-gray-400 text-xs font-medium text-gray-800"
-                style={{ width: "15%" }}
-              >
-                15
-              </div>
-            </div>
-            <div className="mt-1.5 flex justify-between text-xs text-gray-300">
-              <span>Equity</span>
-              <span>Debt</span>
-              <span>Gold</span>
-              <span>Cash</span>
-            </div>
-          </div>
-
-          {/* AI Insights */}
-          <div className="mb-5">
-            <p className="mb-2 text-sm font-medium text-gray-200">
-              AI Insights
-            </p>
+            <p className="mb-2 text-sm font-medium text-gray-200">AI Insights</p>
             <ul className="flex flex-col gap-2 text-sm text-gray-200">
+              {healthScore > 7 ? (
+                <li className="flex items-start gap-2"><span className="mt-1 h-2 w-2 rounded-full bg-green-400"></span>Current savings rate supports healthy growth.</li>
+              ) : (
+                <li className="flex items-start gap-2"><span className="mt-1 h-2 w-2 rounded-full bg-yellow-400"></span>Consider reducing monthly expenses to boost score.</li>
+              )}
               <li className="flex items-start gap-2">
-                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-400" />
-                Portfolio well-diversified across asset classes
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-green-400" />
-                Debt-to-asset ratio is healthy at 12.3%
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-yellow-400" />
-                Consider increasing equity allocation by 5%
+                <span className="mt-1 h-2 w-2 rounded-full bg-blue-400"></span>
+                {assetDistribution.length > 0 ? "Portfolio has diverse liquidity sources." : "Start by funding your Normal Wallet."}
               </li>
             </ul>
           </div>
-
-          <a
-            href="/investments"
-            className="block w-full rounded-lg border border-white/30 bg-white/10 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/20"
-          >
-            View Detailed Investment Plan
-          </a>
-        </div>
-      </div>
-
-      {/* Financial Health Breakdown */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h3 className="mb-5 text-lg font-semibold text-foreground">
-          Financial Health Breakdown
-        </h3>
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          {financialHealthScores.map((item) => (
-            <div key={item.label}>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {item.label}
-                </span>
-                <span className="text-sm font-bold text-primary">
-                  {item.score}/10
-                </span>
-              </div>
-              <div className="h-2.5 w-full rounded-full bg-muted">
-                <div
-                  className="h-2.5 rounded-full bg-primary"
-                  style={{ width: `${item.score * 10}%` }}
-                />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

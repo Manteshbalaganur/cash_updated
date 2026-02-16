@@ -2,11 +2,13 @@
 
 import { useState, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@/lib/user-context";
 import { uploadFile } from "@/lib/api-client";
 import { toast } from "sonner";
 
 export function FileUploadZone() {
   const { userId } = useAuth();
+  const { isSuper } = useUser();
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -21,7 +23,7 @@ export function FileUploadZone() {
     try {
       setUploading(true);
       setFileName(file.name);
-      await uploadFile(file, userId);
+      await uploadFile(file, userId, isSuper);
       toast.success("File processed successfully!");
       // Optionally trigger a refresh of other components
       window.dispatchEvent(new Event("transaction-added"));

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { DollarIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
@@ -17,6 +18,7 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export default function InsightsPage() {
   const { userId, isLoaded } = useAuth();
+  const { isSuper } = useUser();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any[]>([]);
   const [aiInsights, setAiInsights] = useState<any>(null);
@@ -31,7 +33,7 @@ export default function InsightsPage() {
 
       // 1. Fetch Summary (Monthly)
       // Note: Backend /api/dashboard/monthly-summary returns { monthly_income, monthly_expenses, net_savings, savings_rate ... }
-      const summaryData = await fetchWithAuth("/api/dashboard/monthly-summary/{userId}", userId);
+      const summaryData = await fetchWithAuth("/api/dashboard/monthly-summary/{userId}", userId, {}, isSuper);
       setSummary({
         income: summaryData.monthly_income,
         expense: summaryData.monthly_expenses,
@@ -41,7 +43,7 @@ export default function InsightsPage() {
 
       // 2. Fetch AI Suggestions
       // Backend returns { wallets: {...}, suggestions: ["..."] }
-      const aiData = await fetchWithAuth("/api/ai-suggestions/{userId}", userId);
+      const aiData = await fetchWithAuth("/api/ai-suggestions/{userId}", userId, {}, isSuper);
       const suggestions = aiData.suggestions || [];
       setAiInsights({
         observation: suggestions[0] || "Your spending patterns are being analyzed.",
@@ -49,13 +51,13 @@ export default function InsightsPage() {
       });
 
       // 3. Fetch Recent Transactions
-      const txData = await fetchWithAuth("/api/transactions/{userId}", userId);
+      const txData = await fetchWithAuth("/api/transactions/{userId}", userId, {}, isSuper);
       // Sort by date desc
       const sortedTx = (txData || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTransactions(sortedTx);
 
       // 4. Fetch Wallet balances for total balance
-      const walletsData = await fetchWithAuth("/api/wallets/{userId}", userId);
+      const walletsData = await fetchWithAuth("/api/wallets/{userId}", userId, {}, isSuper);
       const totalBalance = (walletsData.normal || 0) + (walletsData.cashback || 0) + (walletsData.emergency || 0);
 
       // Set stats for the top cards
@@ -89,7 +91,7 @@ export default function InsightsPage() {
       // 5. Categories
       // Fetch from analytics to get coloring and grouped data
       try {
-        const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId);
+        const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId, {}, isSuper);
         const cats = analytics.expensesByCategory || [];
 
         // Calculate percentages
@@ -111,7 +113,7 @@ export default function InsightsPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isSuper]);
 
   useEffect(() => {
     if (isLoaded && userId) {

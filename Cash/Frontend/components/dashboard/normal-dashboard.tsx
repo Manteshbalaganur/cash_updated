@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@clerk/nextjs";
+import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { DollarIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
@@ -20,6 +21,8 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export function NormalDashboard() {
   const { userId, isLoaded } = useAuth();
+  const { isSuper } = useUser();
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<any>(null);
@@ -32,7 +35,7 @@ export function NormalDashboard() {
       setLoading(true);
 
       // 1. Fetch Dashboard Summary (Cards)
-      const summary = await fetchWithAuth("/api/dashboard/summary/{userId}", userId);
+      const summary = await fetchWithAuth("/api/dashboard/summary/{userId}", userId, {}, isSuper);
 
       // Update Stats Cards
       setStats([
@@ -71,7 +74,7 @@ export function NormalDashboard() {
       });
 
       // 2. Fetch Analytics (Charts)
-      const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId);
+      const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId, {}, isSuper);
 
       // Update Charts
       setChartData(analytics.incomeVsExpense || []);
@@ -83,7 +86,7 @@ export function NormalDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isSuper]);
 
   useEffect(() => {
     if (isLoaded && userId) {

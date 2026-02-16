@@ -1,10 +1,15 @@
 "use client";
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import type { investmentAllocation } from "@/lib/mock-data";
+
+interface AllocationItem {
+  name: string;
+  value: number;
+  color: string;
+}
 
 interface AllocationChartProps {
-  data: typeof investmentAllocation;
+  data: AllocationItem[];
 }
 
 export function AllocationChart({ data }: AllocationChartProps) {

@@ -26,7 +26,7 @@ export default function WalletsPage() {
     if (!userId) return;
     try {
       setLoading(true);
-      const data = await fetchWithAuth("/api/wallets/{userId}", userId);
+      const data = await fetchWithAuth("/api/wallets/{userId}", userId, {}, isSuper);
       setWalletsData(data);
     } catch (error) {
       console.error("Error loading wallets:", error);
@@ -34,17 +34,15 @@ export default function WalletsPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isSuper]);
 
   useEffect(() => {
-    if (isSuper) {
-      router.replace("/dashboard");
-    } else if (isLoaded && userId) {
+    if (isLoaded && userId) {
       loadWallets();
     }
-  }, [isSuper, router, userId, isLoaded, loadWallets]);
+  }, [isSuper, userId, isLoaded, loadWallets]);
 
-  if (isSuper || !isLoaded) return null;
+  if (!isLoaded) return null;
 
   const totalBalance = walletsData ? (walletsData.normal + walletsData.cashback + walletsData.emergency) : 0;
 

@@ -20,8 +20,8 @@ export interface UserProfile {
 interface UserContextValue {
   user: UserProfile;
   mode: UserMode;
-  setMode: (mode: UserMode) => void;
-  toggleMode: () => void;
+  setMode: (mode: UserMode) => Promise<void>;
+  toggleMode: () => Promise<void>;
   isSuper: boolean;
   isLoaded: boolean;
 }
@@ -33,29 +33,54 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<UserMode>("normal");
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from localStorage on mount
+  // Load from Clerk metadata or localStorage on mount/user load
   useEffect(() => {
-    const savedMode = localStorage.getItem("user-mode") as UserMode;
-    if (savedMode && (savedMode === "normal" || savedMode === "super")) {
-      setModeState(savedMode);
+    if (!clerkLoaded) return;
+
+    // Check Clerk Metadata first (Persisted Cross-Device)
+    // We check unsafeMetadata (writable from client) and publicMetadata (writable from backend)
+    const metaSuper = clerkUser?.unsafeMetadata?.superMode || clerkUser?.publicMetadata?.superMode;
+
+    if (metaSuper === true) {
+      setModeState("super");
+    } else if (metaSuper === false) {
+      setModeState("normal");
+    } else {
+      // Fallback to localStorage if not set in Clerk
+      const savedMode = localStorage.getItem("user-mode") as UserMode;
+      if (savedMode && (savedMode === "normal" || savedMode === "super")) {
+        setModeState(savedMode);
+      }
     }
+
     setIsLoaded(true);
-  }, []);
+  }, [clerkLoaded, clerkUser]);
 
-  // Save to localStorage whenever mode changes
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem("user-mode", mode);
-    }
-  }, [mode, isLoaded]);
-
-  const setMode = useCallback((newMode: UserMode) => {
+  // Save to localStorage and Clerk Metadata whenever mode changes (triggered by user action)
+  const setMode = useCallback(async (newMode: UserMode) => {
+    // 1. Optimistic Update
     setModeState(newMode);
-  }, []);
+    localStorage.setItem("user-mode", newMode);
 
-  const toggleMode = useCallback(() => {
-    setModeState((prev) => (prev === "normal" ? "super" : "normal"));
-  }, []);
+    // 2. Persist to Clerk (Cross-Device)
+    if (clerkUser) {
+      try {
+        await clerkUser.update({
+          unsafeMetadata: {
+            superMode: newMode === "super"
+          }
+        });
+      } catch (err) {
+        console.error("Failed to update Clerk metadata:", err);
+        // Optionally revert state here if strict consistency is needed
+      }
+    }
+  }, [clerkUser]);
+
+  const toggleMode = useCallback(async () => {
+    const newMode = mode === "normal" ? "super" : "normal";
+    await setMode(newMode);
+  }, [mode, setMode]);
 
   const value: UserContextValue = {
     user: {

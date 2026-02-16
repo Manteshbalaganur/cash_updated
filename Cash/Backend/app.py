@@ -18,9 +18,23 @@ try:
 except ImportError:
     print("WARNING: opencv-python-headless not installed. Image processing might be limited.")
 
-from database import transactions
+# Import both collections
+from database import normal_transactions, super_transactions
 
 print(f">>> STARTUP: Backend script starting at {datetime.now()}")
+
+# ---------------- DATABASE HELPER ----------------
+def get_transactions_collection():
+    """
+    Returns the appropriate transactions collection based on the 'X-Super-Mode' header.
+    Default: normal_transactions
+    """
+    is_super = request.headers.get('X-Super-Mode', 'false').lower() == 'true'
+    if is_super:
+        # print("DEBUG: Using SUPER USER database")
+        return super_transactions
+    # print("DEBUG: Using NORMAL USER database")
+    return normal_transactions
 
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
@@ -109,7 +123,8 @@ def add_expense():
         }
 
         print(f"DEBUG: Inserting record: {record}")
-        transactions.insert_one(record)
+        # Insert into Correct DB
+        get_transactions_collection().insert_one(record)
 
         return jsonify({"message": "Expense added successfully", "status": "success"})
 
@@ -441,11 +456,10 @@ def upload_file():
         # ---------------------------------------------------------
         inserted_count = 0
         if records:
-            # Add strict validation before insert?
-            # For now, just insert
-            result = transactions.insert_many(records)
+            # Use dynamic DB
+            result = get_transactions_collection().insert_many(records)
             inserted_count = len(result.inserted_ids)
-            print(f"DEBUG: Successfully inserted {inserted_count} records.")
+            print(f"DEBUG: Successfully inserted {inserted_count} records via upload.")
         else:
             print("DEBUG: No valid records parsed.")
 
@@ -470,8 +484,9 @@ def upload_file():
 @app.route("/api/get_transactions/<clerk_user_id>", methods=["GET"])
 def get_transactions(clerk_user_id):
     try:
+        # Use dynamic DB depending on Header
         data = list(
-            transactions.find(
+            get_transactions_collection().find(
                 {"clerk_user_id": clerk_user_id},
                 {"_id": 0}
             )
@@ -502,7 +517,7 @@ def wallet_summary(clerk_user_id):
             }}
         ]
 
-        result = transactions.aggregate(pipeline)
+        result = get_transactions_collection().aggregate(pipeline)
 
         wallets = {
             "normal": 0,
@@ -548,7 +563,7 @@ def ai_suggestions(clerk_user_id):
             }}
         ]
 
-        result = transactions.aggregate(pipeline)
+        result = get_transactions_collection().aggregate(pipeline)
 
         wallets = {
             "normal": 0,
@@ -565,7 +580,7 @@ def ai_suggestions(clerk_user_id):
             else:
                 wallets["normal"] += r["total"]
 
-        print(f"DEBUG: AI Suggestions Wallets for {clerk_user_id}:", wallets)
+        # print(f"DEBUG: AI Suggestions Wallets for {clerk_user_id}:", wallets)
 
         suggestions = generate_ai_suggestions(wallets)
 
@@ -605,7 +620,8 @@ def dashboard_summary(clerk_user_id):
                 }}
             ]
             
-            result = list(transactions.aggregate(pipeline))
+            # Use dynamic DB
+            result = list(get_transactions_collection().aggregate(pipeline))
             income = 0
             expenses = 0
             
@@ -656,7 +672,6 @@ def dashboard_summary(clerk_user_id):
             }
         }
         
-        print(f"DEBUG: Dashboard Summary for {clerk_user_id}:", summary)
         return jsonify(summary)
 
     except Exception as e:
@@ -690,10 +705,10 @@ def monthly_summary(clerk_user_id):
                     "total": {"$sum": "$amount"}
                 }}
             ]
-            res = list(transactions.aggregate(pipeline))
+            result = list(get_transactions_collection().aggregate(pipeline))
             income = 0
             expenses = 0
-            for r in res:
+            for r in result:
                 if r["_id"] == "credit":
                     income = r["total"]
                 elif r["_id"] == "debit":
@@ -725,7 +740,7 @@ def monthly_summary(clerk_user_id):
             "month_name": now.strftime("%B %Y")
         }
 
-        print(f"DEBUG: Monthly Summary for {clerk_user_id}:", summary)
+        # print(f"DEBUG: Monthly Summary for {clerk_user_id}:", summary)
         return jsonify(summary)
 
     except Exception as e:
@@ -741,8 +756,8 @@ def dashboard_analytics(clerk_user_id):
         from datetime import datetime, timedelta
         from collections import defaultdict
         
-        # Get all transactions for this user
-        all_transactions = list(transactions.find({"clerk_user_id": clerk_user_id}))
+        # Get all transactions using dynamic DB
+        all_transactions = list(get_transactions_collection().find({"clerk_user_id": clerk_user_id}))
         
         # Calculate expense by category (for pie chart)
         expense_by_category = defaultdict(float)
@@ -780,7 +795,9 @@ def dashboard_analytics(clerk_user_id):
                 # Parse date
                 tx_date = tx.get("date")
                 if isinstance(tx_date, str):
-                    dt = datetime.fromisoformat(tx_date.replace('Z', '+00:00'))
+                    # Robust parsing for YYYY-MM-DD
+                    tx_date = tx_date.split('T')[0]
+                    dt = datetime.strptime(tx_date, "%Y-%m-%d")
                 else:
                     dt = tx_date
                 
@@ -794,26 +811,21 @@ def dashboard_analytics(clerk_user_id):
                 continue
         
         # Convert to list and sort by date
-        income_vs_expense = [
-            {
+        income_vs_expense = []
+        for month, data in monthly_data.items():
+             income_vs_expense.append({
                 "month": month,
                 "income": round(data["income"], 2),
                 "expense": round(data["expense"], 2)
-            }
-            for month, data in sorted(monthly_data.items())
-        ]
-        
-        # If no data, return empty arrays
-        if not income_vs_expense:
-            income_vs_expense = []
-        if not expenses_by_category:
-            expenses_by_category = []
+            })
+            
+        # Sort logic could be improved, but this is basic
         
         return jsonify({
-            "incomeVsExpense": income_vs_expense[-6:],  # Last 6 months
-            "expensesByCategory": expenses_by_category
+            "expensesByCategory": expenses_by_category,
+            "incomeVsExpense": income_vs_expense
         })
-    
+
     except Exception as e:
         print(f"ERROR in dashboard_analytics: {str(e)}")
         import traceback
