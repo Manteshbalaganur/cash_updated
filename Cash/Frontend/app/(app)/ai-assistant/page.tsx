@@ -320,6 +320,10 @@ export default function AiAssistantPage() {
 
   // FIXED: Correct WebSocket URL - your backend runs on port 8000 with /interact endpoint
   const wsUrl = "ws://localhost:8000/interact"; // Hardcode for now to test
+  // in your chat page/component
+
+// const { userId } = useAuth();
+// const wsUrl = new WebSocket(`ws://localhost:8000/interact?user_id=${userId || 'anonymous'}`);
 
   useEffect(() => {
     async function loadAiContext() {
