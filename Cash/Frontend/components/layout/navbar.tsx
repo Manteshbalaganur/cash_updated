@@ -24,7 +24,7 @@ export function Navbar() {
           </svg>
         </div>
         <div>
-          <h1 className="text-lg font-bold text-foreground">FinanceAI</h1>
+          <h1 className="text-lg font-bold text-foreground">CashMate</h1>
           <p className="text-xs text-muted-foreground">
             <SignedIn>
               Welcome back,{" "}
@@ -36,7 +36,7 @@ export function Navbar() {
               )}
             </SignedIn>
             <SignedOut>
-              Welcome to FinanceAI
+              Welcome to CashMate
             </SignedOut>
           </p>
         </div>
