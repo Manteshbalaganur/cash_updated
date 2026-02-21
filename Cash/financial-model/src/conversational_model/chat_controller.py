@@ -240,77 +240,185 @@ async def get_chat_page():
 #             pass
 # chatcontrollers.py  (only showing the changed part)
 
+# from fastapi import WebSocket, WebSocketDisconnect, Query
+
+# @cnv_router.websocket("/interact")
+# async def websocket_endpoint(
+#     websocket: WebSocket
+# ):
+#     await websocket.accept()
+#     conn_id = id(websocket)
+
+#     print(f"WebSocket opened — connection_id = {conn_id}")
+
+#     try:
+#         while True:
+#             try:
+#                 # Receive message (it can be text or JSON string)
+#                 message = await websocket.receive_text()
+#             except WebSocketDisconnect:
+#                 break
+
+#             if not message:
+#                 continue
+
+#             print(f"DEBUG: Received raw message: {message[:100]}")
+
+#             # Default values
+
+#             text = message
+#             user_id = "guest"
+#             mode = "normal"
+
+#             # Try to parse as JSON if it looks like JSON
+#             if message.strip().startswith("{") and message.strip().endswith("}"):
+#                 try:
+#                     data = json.loads(message)
+#                     text = data.get("message", text)
+#                     user_id = data.get("userId", user_id)
+#                     mode = data.get("mode", mode)
+#                 except json.JSONDecodeError:
+#                     pass
+
+#             print(f"Processing message for user {user_id}: {text[:50]}...")
+
+#             history_store[conn_id].append({"role": "user", "content": text})
+#             recent_history = history_store[conn_id][-10:]
+
+#             try:
+#                 # Call LLM_response with the correct user_id and mode
+#                 result = await LLM_response(
+#                     text=text,
+#                     history=recent_history,
+#                     user_id=user_id,
+#                     mode=mode,
+#                 )
+                
+#                 reply = result.reply
+
+#                 history_store[conn_id].append({"role": "assistant", "content": reply})
+                
+#                 # Send back the reply as JSON or text
+#                 # Frontend expects either plain text (which it handles) or JSON
+#                 await websocket.send_text(reply)
+                
+#             except Exception as e:
+#                 print(f"Error in LLM_response: {e}")
+#                 await websocket.send_text(f"Sorry, I encountered an error: {str(e)}")
+
+#     except Exception as e:
+#         print(f"WS error: {e}")
+#     finally:
+#         history_store.pop(conn_id, None)
+#         try:
+#             await websocket.close()
+#         except:
+#             pass
+import json
 from fastapi import WebSocket, WebSocketDisconnect, Query
+from typing import Dict, Any
+
+# Already defined in this file:
+# cnv_router = APIRouter()
+# history_store = defaultdict(list)
+
 
 @cnv_router.websocket("/interact")
 async def websocket_endpoint(
-    websocket: WebSocket
+    websocket: WebSocket,
+    # Optional: you can also accept user_id via query param for extra security
+    # user_id: str = Query(default=None, alias="uid")
 ):
     await websocket.accept()
     conn_id = id(websocket)
 
-    print(f"WebSocket opened — connection_id = {conn_id}")
+    print(f"[WS] Connection opened — conn_id = {conn_id}")
 
     try:
         while True:
             try:
-                # Receive message (it can be text or JSON string)
-                message = await websocket.receive_text()
+                raw_message = await websocket.receive_text()
             except WebSocketDisconnect:
+                print(f"[WS] Client disconnected — conn_id = {conn_id}")
+                break
+            except Exception as e:
+                print(f"[WS] Receive error: {e}")
                 break
 
-            if not message:
+            if not raw_message.strip():
                 continue
 
-            print(f"DEBUG: Received raw message: {message[:100]}")
+            print(f"[WS] ← Received: {raw_message[:120]}{'...' if len(raw_message) > 120 else ''}")
 
-            # Default values
-
-            text = message
-            user_id = "guest"
+            # Default fallback values
+            text = ""
+            user_id = "guest_anonymous"
             mode = "normal"
 
-            # Try to parse as JSON if it looks like JSON
-            if message.strip().startswith("{") and message.strip().endswith("}"):
-                try:
-                    data = json.loads(message)
-                    text = data.get("message", text)
-                    user_id = data.get("userId", user_id)
-                    mode = data.get("mode", mode)
-                except json.JSONDecodeError:
-                    pass
+            # Try to parse as JSON (what your React frontend sends)
+            try:
+                data_json: Dict[str, Any] = json.loads(raw_message)
+                text = str(data_json.get("message", "")).strip()
+                user_id = str(data_json.get("userId", user_id)).strip()
+                mode = str(data_json.get("mode", mode)).strip().lower()
 
-            print(f"Processing message for user {user_id}: {text[:50]}...")
+                # Optional: extra validation
+                if not text:
+                    await websocket.send_text("No message content received.")
+                    continue
 
+            except json.JSONDecodeError:
+                # If not JSON, treat as plain text message
+                text = raw_message.strip()
+
+            if not text:
+                continue
+
+            print(f"[WS] Processing → user_id={user_id} | mode={mode} | text={text[:60]}...")
+
+            # Store user message in history
             history_store[conn_id].append({"role": "user", "content": text})
-            recent_history = history_store[conn_id][-10:]
+            recent_history = history_store[conn_id][-12:]  # keep last 12 messages
 
             try:
-                # Call LLM_response with the correct user_id and mode
+                # Call your LLM function — must accept mode parameter!
                 result = await LLM_response(
                     text=text,
                     history=recent_history,
                     user_id=user_id,
-                    mode=mode,
+                    mode=mode,                    # ← now passed correctly
+                    # file_content_summary=...    # add if you support file uploads later
                 )
+
+                # Diagnostics 
+                print(f"[WS] reply_type: {type(result.reply)}")
                 
                 reply = result.reply
+                if isinstance(reply, list):
+                    reply_text = " ".join([str(r) for r in reply]).strip()
+                else:
+                    reply_text = str(reply).strip()
 
-                history_store[conn_id].append({"role": "assistant", "content": reply})
-                
-                # Send back the reply as JSON or text
-                # Frontend expects either plain text (which it handles) or JSON
-                await websocket.send_text(reply)
-                
+                # Store assistant reply
+                history_store[conn_id].append({"role": "assistant", "content": reply_text})
+
+                # Send back plain text reply
+                await websocket.send_text(reply_text)
+
+                print(f"[WS] → Sent reply (len={len(reply_text)})")
+
             except Exception as e:
-                print(f"Error in LLM_response: {e}")
-                await websocket.send_text(f"Sorry, I encountered an error: {str(e)}")
+                error_msg = f"Sorry, something went wrong on our side: {str(e)}"
+                print(f"[WS] LLM error: {e}")
+                await websocket.send_text(error_msg)
 
     except Exception as e:
-        print(f"WS error: {e}")
+        print(f"[WS] General WebSocket error: {e}")
     finally:
         history_store.pop(conn_id, None)
         try:
             await websocket.close()
         except:
             pass
+
+    print(f"[WS] Connection closed — conn_id = {conn_id}")

@@ -21,7 +21,7 @@ const initialMessages: Message[] = [
         id: "1",
         role: "assistant",
         content:
-            "Welcome to your Premium Investment Planner. I am the **'Doctor of Money'**, your dedicated Portfolio Manager. \n\nI've analyzed your current financial standing. My goal is to help you build a bulletproof investment strategy. \n\nWhat are your financial goals? (e.g., Buying a home, Retirement, or Wealth Creation)",
+            "Welcome to your Premium Investment Planner. I am **Dhan Saathi**, your personal Portfolio Manager. \n\nI've analyzed your current financial standing. My goal is to help you build a bulletproof investment strategy. \n\nWhat are your financial goals? (e.g., Buying a home, Retirement, or Wealth Creation)",
     },
 ];
 
@@ -254,7 +254,7 @@ export default function InvestmentPlannerPage() {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-3 w-3 animate-pulse rounded-full bg-green-500" />
-                                <span className="text-sm font-bold text-foreground">Doctor of Money (Portfolio AI)</span>
+                                <span className="text-sm font-bold text-foreground">Dhan Saathi (Portfolio AI)</span>
                             </div>
                             <div className="text-[10px] font-bold text-muted-foreground uppercase">Expert Mode Enabled</div>
                         </div>

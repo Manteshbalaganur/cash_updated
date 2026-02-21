@@ -1,168 +1,15 @@
-# import json
-# from typing import List, Dict, Any, Optional
-
-# from dotenv import load_dotenv
-# from langchain_google_genai import GoogleGenerativeAI, HarmCategory, HarmBlockThreshold
-# from pydantic import BaseModel
-
-# load_dotenv()  # Loads GOOGLE_API_KEY from .env
-
-# class MessageAnalysis(BaseModel):
-#     reply: str
-#     intent: str
-
-# async def LLM_response(
-#     text: str,
-#     history: List[Dict[str, str]] = None,
-#     file_content_summary: Optional[str] = None,
-# ) -> MessageAnalysis:
-#     """
-#     Strict finance-only assistant with conversation history and file awareness.
-#     """
-#     if history is None:
-#         history = []
-
-#     # Build conversation context
-#     context = ""
-#     for msg in history:
-#         role = "User" if msg["role"] == "user" else "Assistant"
-#         context += f"{role}: {msg['content']}\n\n"
-
-#     # File context if present
-#     file_info = ""
-#     if file_content_summary:
-#         file_info = f"\n\nUploaded file content summary:\n{file_content_summary}\n"
-
-#     # Very strict system prompt
-#     prompt = f"""You are Vault Finance Chat System — an EXPERT Indian personal finance assistant powered by strict rules.
-
-# <ROLE>
-# You exist ONLY to provide helpful, accurate, responsible advice about PERSONAL FINANCE in the Indian context.
-# You NEVER answer anything outside this scope.
-# </ROLE>
-
-# <STRICT_RULES — YOU MUST FOLLOW ALL OF THESE OR YOU WILL BE SHUT DOWN>
-# 1. Allowed topics ONLY:
-#    - Budgeting, expense tracking, saving habits
-#    - Debt management, loan repayment strategies
-#    - Investment options: mutual funds, SIP, stocks, ETFs, gold, fixed deposits, PPF, NPS, ELSS, RD, bonds
-#    - Tax planning (old vs new regime, 80C, 80D, HRA, capital gains)
-#    - Retirement & long-term planning
-#    - Insurance (term, health, ULIP vs pure term)
-#    - Credit score improvement, credit card usage
-#    - Analysis of uploaded financial documents (bank statements, expense sheets, investment portfolios)
-#    - Basic financial math (compound interest, EMI, returns calculation)
-
-# 2. For ANY question that is NOT clearly one of the above topics → you MUST return EXACTLY this JSON and NOTHING ELSE — no explanation, no apology, no extra sentence:
-# {{
-#   "reply": "I'm sorry, I can only help with personal finance topics in India (budgeting, investing, taxes, debt, savings, retirement, insurance). How can I assist you with your money matters today?",
-#   "intent": "Non-finance Query"
-# }}
-
-# 3. Never break character. Never say "I can try", "maybe", "as an AI", "I'm not sure", "let me think".  
-#    Either answer properly in finance domain or use the exact refusal JSON above.
-
-# 4. Tone & style rules:
-#    - Empathetic, calm, professional, non-judgmental
-#    - Use simple language — avoid jargon unless explaining it
-#    - Always include risk disclaimer when suggesting investments
-#    - Recommend consulting a SEBI-registered advisor for personalized advice
-#    - Use ₹ symbol and Indian numbering (lakhs, crores)
-
-# 5. File analysis rules (when user uploads CSV/Excel/PDF):
-#    - Focus ONLY on financial numbers: income, expenses, categories, trends, savings rate, debt-to-income, investment allocation
-#    - Give actionable insights: highest expense category, potential savings, red flags
-#    - If file appears non-financial or unreadable → use refusal JSON with message: "The uploaded file doesn't contain readable financial data."
-
-# 6. Response format — ALWAYS return ONLY valid JSON. No extra text, no markdown, no comments:
-# {{
-#   "reply": "...",
-#   "intent": "one of: Investment Advice, Debt Management, Budget Planning, Savings Strategy, Tax Planning, Retirement Planning, Insurance Advice, Financial Education, Non-finance Query, Help Request"
-# }}
-# </STRICT_RULES>
-
-# Conversation history so far:
-# {context}
-
-# {file_info if file_content_summary else ""}
-
-# Current user message: "{text}"
-
-# Respond now. Return ONLY JSON.
-# """
-
-#     # Model initialization
-#     vault_llm = GoogleGenerativeAI(
-#         model="gemini-3-flash-preview",
-#         temperature=0.35,
-#         safety_settings={
-#             HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-#             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-#         }
-#     )
-
-#     # vault_llm = GoogleGenerativeAI(
-#     #     model="gemini-3-flash-preview",           # ← 8b version is usually faster & cheaper
-#     #     temperature=0.15,                      # ← much lower = less creative, more deterministic
-#     #     top_p=0.85,
-#     #     top_k=40,
-#     #     max_output_tokens=600,                 # ← enough for good replies, not too long
-#     #     safety_settings={
-#     #         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-#     #         HarmCategory.HARM_CATEGORY_HARASSMENT:        HarmBlockThreshold.BLOCK_NONE,
-#     #         HarmCategory.HARM_CATEGORY_HATE_SPEECH:       HarmBlockThreshold.BLOCK_NONE,
-#     #         HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-#     #     }
-#     # )
-
-#     try:
-#         raw_response = vault_llm.invoke(prompt)
-#         content = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
-
-#         # Try direct JSON
-#         data = json.loads(content.strip())
-
-#     except json.JSONDecodeError:
-#         # Fallback: extract JSON block
-#         start = content.find("{")
-#         end = content.rfind("}") + 1
-#         if start != -1 and end > start:
-#             try:
-#                 data = json.loads(content[start:end])
-#             except:
-#                 data = {
-#                     "reply": "I'm sorry, but I can only assist with finance-related questions. How can I help you with your money matters today?",
-#                     "intent": "Non-finance Query"
-#                 }
-#         else:
-#             data = {
-#                 "reply": "I'm sorry, but I can only assist with finance-related questions. How can I help you with your money matters today?",
-#                 "intent": "Non-finance Query"
-#             }
-
-#     except Exception as e:
-#         data = {
-#             "reply": f"Internal error: {str(e)}. Please try again.",
-#             "intent": "Help Request"
-#         }
-
-#     try:
-#         return MessageAnalysis(**data)
-#     except:
-#         return MessageAnalysis(
-#             reply="I'm sorry, but I can only assist with finance-related questions. How can I help you with your money matters today?",
-#             intent="Non-finance Query"
-#         )
 import json
 import os
+import httpx
+import asyncio
+import re
 from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from pydantic import BaseModel
-
-# removed dummy import
 
 load_dotenv()
 
@@ -170,95 +17,87 @@ class MessageAnalysis(BaseModel):
     reply: str
     intent: str
 
-
-async def fetch_wallet_summary(user_id: str, mode: str = "normal") -> Dict[str, Any]:
+# ────────────────────────────────────────────────
+#  Tool - fetch current financial summary
+# ────────────────────────────────────────────────
+@tool
+async def fetch_wallet_summary(user_id: str, is_super: bool = False) -> Dict[str, Any]:
     """
-    Fetch real summary from the Flask backend API.
+    Retrieve the current financial state for this user.
+    Contains total net worth (total assets minus total liabilities), 
+    plus monthly income/expense breakdowns.
+    Use this tool ALWAYS when users ask about their balance, savings, 
+    risk capacity, or if they can afford an investment.
     """
-    import httpx
     try:
-        # Flask backend is on port 5000
-        backend_url = f"http://localhost:5000/api/dashboard/summary/{user_id}"
-        is_super = str(mode).lower() == "super"
-        
-        print(f"DEBUG: Fetching wallet summary from {backend_url} (Super Mode: {is_super})")
+        # Backend URLs
+        summary_url = f"http://localhost:5000/api/dashboard/summary/{user_id}"
+        wallets_url = f"http://localhost:5000/api/wallets/{user_id}"
+        liabilities_url = f"http://localhost:5000/api/liabilities/{user_id}"
         
         headers = {"X-Super-Mode": "true" if is_super else "false"}
+        print(f"DEBUG: Tool fetching comprehensive summary for {user_id} (Super: {is_super})")
         
         async with httpx.AsyncClient() as client:
-            response = await client.get(backend_url, headers=headers, timeout=5.0)
-            if response.status_code == 200:
-                summary = response.json()
-                return {
-                    "current_net_savings": summary.get("net_savings", 0),
-                    "monthly_income": summary.get("total_income", 0),
-                    "monthly_expenses": summary.get("total_expenses", 0),
-                    "savings_rate_percent": summary.get("savings_rate", 0),
-                    "currency": "INR",
-                    "symbol": "₹",
-                    "note": "Real-time summary from tracked transactions",
-                    "last_updated": summary.get("month", "Current month")
-                }
-            else:
-                print(f"DEBUG: Backend returned status {response.status_code}")
+            # Fetch all required data in parallel
+            tasks = [
+                client.get(summary_url, headers=headers),
+                client.get(wallets_url, headers=headers),
+                client.get(liabilities_url, headers=headers)
+            ]
+            responses = await asyncio.gather(*tasks)
+            
+            summary = responses[0].json() if responses[0].status_code == 200 else {}
+            wallets = responses[1].json() if responses[1].status_code == 200 else {}
+            liabilities = responses[2].json() if responses[2].status_code == 200 else {}
+            
+            # TOTAL ASSETS (lifetime)
+            total_assets = (wallets.get("normal", 0) + 
+                            wallets.get("cashback", 0) + 
+                            wallets.get("emergency", 0))
+            
+            # TOTAL LIABILITIES (lifetime)
+            total_liabilities = liabilities.get("total", 0)
+            
+            # TOTAL NET WORTH (This is what the user usually means by 'balance')
+            net_worth = total_assets - total_liabilities
+            
+            result = {
+                "currency": "INR",
+                "total_net_worth": round(net_worth, 2),
+                "total_assets": round(total_assets, 2),
+                "total_liabilities": round(total_liabilities, 2),
+                "monthly_net_savings": summary.get("net_savings", 0),
+                "monthly_income": summary.get("total_income", 0),
+                "monthly_expenses": summary.get("total_expenses", 0),
+                "savings_rate_percent": summary.get("savings_rate", 0),
+                "month": summary.get("month", "Current Month"),
+                "status": "success"
+            }
+            print(f"DEBUG: Tool final result: {result}")
+            return result
+            
     except Exception as e:
-        print(f"DEBUG: Error fetching summary: {e}")
+        print(f"DEBUG: Tool error: {e}")
+        return {"error": f"Could not fetch data: {str(e)}", "total_net_worth": 0}
 
-    # Safe fallback if DB call fails
-    return {
-        "current_net_savings": 0,
-        "monthly_income": 0,
-        "monthly_expenses": 0,
-        "savings_rate_percent": 0,
-        "currency": "INR",
-        "symbol": "₹",
-        "note": "Could not connect to financial database",
-        "last_updated": "N/A"
-    }
+tools = [fetch_wallet_summary]
 
+# ────────────────────────────────────────────────
+#   MAIN SYSTEM PROMPT
+# ────────────────────────────────────────────────
+SYSTEM_PROMPT = """You are Dhan Saathi — a helpful and friendly Indian personal finance assistant (Doctor of Money).
 
+You help users track expenses, budget, save, and invest specifically in the Indian market.
 
-SYSTEM_PROMPT = """You are CashMate — an EXPERT personal finance assistant.
-
-<ROLE>
-You exist ONLY to provide helpful, accurate, responsible advice about PERSONAL FINANCE.
-You NEVER answer anything outside this scope.
-
-If the user is in 'super' mode, you are their **Portfolio Manager & Investment Expert** (affectionately called the 'Doctor of Money'). Your goal is to help them plan their wealth, optimize their portfolio, and provide advanced investment strategies.
-   
-   In 'super' mode, you MUST structure your advice as an **Investment Prescription**:
-   - **Diagnosis**: Based on their current savings rate and income.
-   - **Strategy**: The core logic of the plan (e.g., Aggressive Growth, Balanced Preservation).
-   - **Action Plan**: Specific steps (e.g., ₹20k in Index Funds, ₹5k in Debt, Tax-saving investments).
-   - **Pro-tip**: A small expert tip on optimization (e.g., Step-up SIP, rebalancing).
-</ROLE>
-
-<STRICT_RULES — MUST FOLLOW ALL>
-1. Allowed topics ONLY: budgeting, expense tracking, saving habits, debt management, investments (mutual funds, stocks, ETFs, bonds, fixed deposits, retirement accounts), tax planning, insurance, credit score, basic financial math.
-
-2. For ANY question NOT clearly in the above topics → return EXACTLY this JSON and NOTHING ELSE:
-{
-  "reply": "I'm sorry, I can only help with personal finance questions (budgeting, saving, investing, debt, taxes, insurance, retirement). How can I assist you with your money matters today?",
-  "intent": "Non-finance Query"
-}
-
-3. You are given the user's current financial summary at the start of every conversation. Use the EXACT numbers and currency shown. Do NOT invent or convert values.
-
-   After using this information:
-   - Use approximate language when helpful (around ₹3,200, approximately ₹4,300 this month)
-   - ALWAYS add this disclaimer at the end when talking about savings, balance or investing:
-     "This is not personalized financial advice. Consult a qualified financial advisor."
-
-4. Tone: Empathetic, calm, professional, non-judgmental. If in 'super' mode, be more strategic and analytical, focusing on long-term wealth creation.
-
-5. ALWAYS return ONLY valid JSON — nothing else:
-{
-  "reply": "your full answer here...",
-  "intent": "Investment Advice | Debt Management | Budget Planning | Savings Strategy | Tax Planning | Retirement Planning | Insurance Advice | Financial Education | Non-finance Query | Help Request"
-}
-</STRICT_RULES>
+CRITICAL RULES:
+1. For ANY question about the user's balance, savings, income, net worth, or money, you MUST use `fetch_wallet_summary`.
+2. Report the `total_net_worth` from the tool as their "Total Balance" or "Net Worth". 
+3. If the tool returns a non-zero number (e.g., 10999), you MUST NOT say "you have 0". 
+4. Monthly data (income/expense) should be used for budgeting advice.
+5. Use ₹ symbol and Indian number system (Lakhs, Crores).
+6. ALWAYS return valid JSON format.
 """
-
 
 async def LLM_response(
     text: str,
@@ -270,23 +109,17 @@ async def LLM_response(
     if history is None:
         history = []
 
-    # Fetch REAL summary from your database / API
-    summary = await fetch_wallet_summary(user_id or "current_user", mode=mode)
+    if not user_id:
+        return MessageAnalysis(
+            reply="I need your user ID to access your financial data.",
+            intent="Help Request"
+        )
 
-    # Build summary text using real values
-    summary_text = (
-        f"Current financial summary (as of {summary['last_updated']}):\n"
-        f"- Net savings: {summary['symbol']}{summary['current_net_savings']:,}\n"
-        f"- Monthly income: {summary['symbol']}{summary['monthly_income']:,}\n"
-        f"- Monthly expenses: {summary['symbol']}{summary['monthly_expenses']:,}\n"
-        f"- Savings rate: {summary['savings_rate_percent']}%"
-    )
-    
-    print(f"DEBUG: Injecting summary for AI: {summary_text}")
+    # Build messages
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
 
-    messages = [SystemMessage(content=SYSTEM_PROMPT + "\n\n" + summary_text)]
-
-    for msg in history:
+    # Limit history to top 5 for token/quota efficiency
+    for msg in history[-5:]:
         if msg["role"] == "user":
             messages.append(HumanMessage(content=msg["content"]))
         else:
@@ -294,50 +127,93 @@ async def LLM_response(
 
     messages.append(HumanMessage(content=text))
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        temperature=0.1,
-        max_output_tokens=600,
-    )
-
+    # Model setup - Using the user's preferred model
     try:
-        response = await llm.ainvoke(messages)
-        content = response.content.strip()
-        print(f"DEBUG: AI raw content: {content}")
-    except Exception as e:
-        print(f"DEBUG: AI invocation error: {e}")
-        content = ""
-
-    if not content:
-        content = json.dumps({
-            "reply": (
-                f"Your current net savings is {summary['symbol']}{summary['current_net_savings']:,}. "
-                f"Monthly income is {summary['symbol']}{summary['monthly_income']:,} "
-                f"and expenses are {summary['symbol']}{summary['monthly_expenses']:,} "
-                f"(savings rate {summary['savings_rate_percent']}%).\n\n"
-                "How else can I assist with your finances?"
-            ),
-            "intent": "Savings Strategy"
-        })
-
-    try:
-        # Robust parsing: try to find the first '{' and last '}' if not directly valid
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start != -1 and end > start:
-            json_str = content[start:end]
-            data = json.loads(json_str)
-        else:
-            data = json.loads(content)
+        try:
+            current_model = "gemini-2.0-flash-exp"
+            llm = ChatGoogleGenerativeAI(
+                model=current_model,
+                temperature=0.2,
+                max_output_tokens=800,
+            )
+            llm_with_tools = llm.bind_tools(tools)
             
-        if "reply" not in data or "intent" not in data:
-            raise ValueError("Missing reply or intent fields")
-    except Exception as e:
-        print(f"DEBUG: JSON parse error: {e} for content: {content}")
-        # Final fallback if parsing fails but we have content
-        data = {
-            "reply": content if len(content) > 10 else "I'm having trouble right now. Could you rephrase your question?",
-            "intent": "Help Request"
-        }
+            # Initial pass
+            response = await llm_with_tools.ainvoke(messages)
+        except Exception as e:
+            print(f"WARN: Primary model '{current_model}' failed ({e}). Using separate fallback 1.5-flash-8b...")
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash-8b", 
+                temperature=0.2,
+                max_output_tokens=800,
+            )
+            llm_with_tools = llm.bind_tools(tools)
+            response = await llm_with_tools.ainvoke(messages)
 
-    return MessageAnalysis(**data)
+        # Handle tool calls (This now runs regardless of which model was used)
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            messages.append(response) 
+            for tool_call in response.tool_calls:
+                if tool_call["name"] == "fetch_wallet_summary":
+                    args = tool_call.get("args", {})
+                    if "user_id" not in args: args["user_id"] = user_id
+                    
+                    # Ensure is_super flag is explicitly passed to the tool
+                    is_super = (mode == "super")
+                    
+                    summary_result = await fetch_wallet_summary.ainvoke({
+                        **args,
+                        "is_super": is_super
+                    })
+                    messages.append(ToolMessage(
+                        content=json.dumps(summary_result),
+                        tool_call_id=tool_call["id"]
+                    ))
+
+            # Second pass after tool calling
+            response = await llm_with_tools.ainvoke(messages)
+
+        # Safely extract text from potentially multi-part content
+        raw_content = response.content
+        if isinstance(raw_content, list):
+            content = "".join([c if isinstance(c, str) else (c.get("text", "") if isinstance(c, dict) else str(c)) for c in raw_content])
+        else:
+            content = str(raw_content)
+
+        # Robust cleaning and parsing
+        content = content.strip()
+        
+        # 1. Try to find JSON block with regex
+        json_match = re.search(r'\{(?:[^{}]|(?R))*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                # Fallback: simple cleanup of markdown
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+                try:
+                    data = json.loads(content)
+                except:
+                    data = {"reply": content, "intent": "General"}
+        else:
+            # No JSON found, wrap raw content
+            data = {"reply": content, "intent": "General"}
+        
+        # Final type safety for reply
+        reply = data.get("reply", "I processed your request but had a formatting issue.")
+        if isinstance(reply, list):
+            reply = " ".join([str(r) for r in reply])
+        
+        return MessageAnalysis(
+            reply=str(reply),
+            intent=str(data.get("intent", "Assistant"))
+        )
+    except Exception as e:
+        print(f"CRITICAL LLM ERROR: {type(e).__name__} - {str(e)}")
+        return MessageAnalysis(
+            reply="Dhan Saathi is momentarily unavailable. (Error: check server logs)",
+            intent="Help Request"
+        )
