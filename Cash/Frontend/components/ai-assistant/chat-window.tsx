@@ -34,7 +34,7 @@ export function ChatWindow({ messages, connectionStatus = "connected" }: ChatWin
 
   const ConnectionStatusBadge = () => {
     if (connectionStatus === "connected") return null;
-    
+
     const statusConfig = {
       connecting: { text: "Connecting...", className: "text-yellow-500" },
       disconnected: { text: "Reconnecting...", className: "text-yellow-500" },
@@ -64,7 +64,7 @@ export function ChatWindow({ messages, connectionStatus = "connected" }: ChatWin
             )}
           >
             {msg.role === "assistant" && (
-              <p className="mb-1 text-xs font-semibold text-primary">AI Assistant</p>
+              <p className="mb-1 text-xs font-semibold text-primary">Dhan Saathi</p>
             )}
             {msg.isTyping ? (
               <div className="flex items-center gap-2">

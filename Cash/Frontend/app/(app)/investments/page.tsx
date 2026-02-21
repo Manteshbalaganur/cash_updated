@@ -28,52 +28,26 @@ export default function InvestmentsPage() {
   const [allocationData, setAllocationData] = useState<any[]>([]);
   const [riskProfile, setRiskProfile] = useState("Unknown");
   const [healthScore, setHealthScore] = useState(0);
+  const [projectedReturns, setProjectedReturns] = useState<any>({ "1y": "0%", "3y": "0%", "5y": "0%" });
+  const [riskMetrics, setRiskMetrics] = useState<any>({ volatility: "N/A", diversification: "N/A", liquidity: "N/A" });
+  const [strategyText, setStrategyText] = useState("");
 
   const loadInvestmentData = useCallback(async () => {
     if (!userId) return;
     try {
       setLoading(true);
 
-      // 1. Fetch Wallets (Current Allocation)
-      const wallets = await fetchWithAuth("/api/wallets/{userId}", userId, {}, isSuper);
+      // Fetch Real Investment Plan from Backend
+      const plan = await fetchWithAuth("/api/investments/plan/{userId}", userId, {}, isSuper);
 
-      // 2. Fetch Summary (Health Score)
-      const summary = await fetchWithAuth("/api/dashboard/summary/{userId}", userId, {}, isSuper);
-
-      // --- CALCULATIONS ---
-
-      const normalBal = wallets.normal || 0;
-      const emergencyBal = wallets.emergency || 0;
-      const cashbackBal = wallets.cashback || 0;
-      const total = normalBal + emergencyBal + cashbackBal;
-
-      // Allocation Chart Data
-      const newAllocation = [
-        { name: "Cash (Normal)", value: normalBal, color: "#4F46E5" },
-        { name: "Savings (Emergency)", value: emergencyBal, color: "#10B981" },
-        { name: "Investments (Cashback)", value: cashbackBal, color: "#F59E0B" },
-      ].filter(i => i.value > 0).map(item => ({
-        ...item,
-        value: total > 0 ? Number(((item.value / total) * 100).toFixed(1)) : 0
-      }));
-      setAllocationData(newAllocation);
-
-      // Risk Profile Calculation
-      // High % in Cashback -> Moderate/High. High % in Emergency -> Low.
-      if (total === 0) {
-        setRiskProfile("N/A");
-      } else if ((cashbackBal / total) > 0.3) {
-        setRiskProfile("Aggressive");
-      } else if ((emergencyBal / total) > 0.5) {
-        setRiskProfile("Conservative");
-      } else {
-        setRiskProfile("Moderate");
+      if (plan) {
+        setAllocationData(plan.allocation || []);
+        setRiskProfile(plan.risk_profile || "Unknown");
+        setHealthScore(plan.health_score || 0);
+        setProjectedReturns(plan.projected_returns || {});
+        setRiskMetrics(plan.risk_metrics || {});
+        setStrategyText(plan.strategy_text || "");
       }
-
-      // Health Score Calculation
-      const savingsRate = summary.savings_rate || 0;
-      const calcScore = Math.min(Math.max((savingsRate / 5), 1), 10).toFixed(1);
-      setHealthScore(Number(calcScore));
 
     } catch (e) {
       console.error("Investment data load error", e);
@@ -117,8 +91,8 @@ export default function InvestmentsPage() {
           <h3 className="font-semibold">AI-Generated Strategy</h3>
         </div>
         <p className="text-sm opacity-95 leading-relaxed">
-          {riskProfile === "N/A" ? "Add funds to your wallets to unlock personalized investment advice." :
-            `Your current portfolio indicates a ${riskProfile.toLowerCase()} risk profile. We recommend maintaining a healthy emergency fund while exploring higher-yield options for your surplus cash.`}
+          {strategyText || (riskProfile === "Unknown" ? "Add funds to your wallets to unlock personalized investment advice." :
+            `Your current portfolio indicates a ${riskProfile.toLowerCase()} risk profile. We recommend maintaining a healthy emergency fund while exploring higher-yield options for your surplus cash.`)}
         </p>
         <div className="mt-3 flex items-center gap-6 text-sm">
           <span className="flex items-center gap-1.5">
@@ -148,9 +122,9 @@ export default function InvestmentsPage() {
             <h3 className="mb-4 text-base font-semibold text-foreground">Proj. Returns ({riskProfile})</h3>
             <div className="flex flex-col gap-3">
               {[
-                { label: "1 Year", range: riskProfile === "Aggressive" ? "10-15%" : "4-6%", width: "40%" },
-                { label: "3 Years", range: riskProfile === "Aggressive" ? "15-20%" : "6-8%", width: "55%" },
-                { label: "5+ Years", range: riskProfile === "Aggressive" ? "20-25%" : "8-12%", width: "70%" },
+                { label: "1 Year", range: projectedReturns["1y"] || "0%", width: "40%" },
+                { label: "3 Years", range: projectedReturns["3y"] || "0%", width: "55%" },
+                { label: "5+ Years", range: projectedReturns["5y"] || "0%", width: "70%" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-4">
                   <span className="w-16 text-sm text-muted-foreground">{item.label}</span>
@@ -170,9 +144,9 @@ export default function InvestmentsPage() {
             <h3 className="mb-3 text-base font-semibold text-foreground">Risk Metrics</h3>
             <div className="flex flex-col gap-2">
               {[
-                { label: "Volatility", value: riskProfile === "Aggressive" ? "High" : "Low", color: riskProfile === "Aggressive" ? "text-red-500" : "text-green-600" },
-                { label: "Diversification", value: allocationData.length > 1 ? "Medium" : "Low", color: allocationData.length > 1 ? "text-yellow-600" : "text-red-600" },
-                { label: "Liquidity", value: "High", color: "text-green-600" },
+                { label: "Volatility", value: riskMetrics.volatility || "N/A", color: (riskMetrics.volatility === "High" || riskMetrics.volatility === "Medium") ? "text-yellow-500" : "text-green-600" },
+                { label: "Diversification", value: riskMetrics.diversification || "N/A", color: riskMetrics.diversification === "Low" ? "text-red-500" : "text-green-600" },
+                { label: "Liquidity", value: riskMetrics.liquidity || "N/A", color: "text-green-600" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between py-1">
                   <span className="text-sm text-muted-foreground">{item.label}</span>

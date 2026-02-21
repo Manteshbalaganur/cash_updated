@@ -18,23 +18,10 @@ try:
 except ImportError:
     print("WARNING: opencv-python-headless not installed. Image processing might be limited.")
 
-# Import both collections
-from database import normal_transactions, super_transactions
+# Single unified database
+from database import db, transactions
 
 print(f">>> STARTUP: Backend script starting at {datetime.now()}")
-
-# ---------------- DATABASE HELPER ----------------
-def get_transactions_collection():
-    """
-    Returns the appropriate transactions collection based on the 'X-Super-Mode' header.
-    Default: normal_transactions
-    """
-    is_super = request.headers.get('X-Super-Mode', 'false').lower() == 'true'
-    if is_super:
-        # print("DEBUG: Using SUPER USER database")
-        return super_transactions
-    # print("DEBUG: Using NORMAL USER database")
-    return normal_transactions
 
 # ---------------- APP INIT ----------------
 app = Flask(__name__)
@@ -114,7 +101,7 @@ def add_expense():
 
         record = {
             "clerk_user_id": data["clerk_user_id"],
-            "date": data.get("date"),
+            "date": data.get("date") or datetime.utcnow().strftime("%Y-%m-%d"),
             "description": data.get("description", ""),
             "amount": float(amount_val),
             "category": data["category"],
@@ -122,9 +109,9 @@ def add_expense():
             "created_at": datetime.utcnow()
         }
 
-        print(f"DEBUG: Inserting record: {record}")
-        # Insert into Correct DB
-        get_transactions_collection().insert_one(record)
+        print(f"DEBUG: Inserting record into MongoDB: {record}")
+        # Always insert into unified transactions collection
+        transactions.insert_one(record)
 
         return jsonify({"message": "Expense added successfully", "status": "success"})
 
@@ -452,14 +439,13 @@ def upload_file():
                 errors.append(f"Image Error: {str(e)}")
 
         # ---------------------------------------------------------
-        # 4. DATABASE INSERTION
+        # 4. DATABASE INSERTION (MongoDB)
         # ---------------------------------------------------------
         inserted_count = 0
         if records:
-            # Use dynamic DB
-            result = get_transactions_collection().insert_many(records)
+            result = transactions.insert_many(records)
             inserted_count = len(result.inserted_ids)
-            print(f"DEBUG: Successfully inserted {inserted_count} records via upload.")
+            print(f"DEBUG: Successfully inserted {inserted_count} records into MongoDB.")
         else:
             print("DEBUG: No valid records parsed.")
 
@@ -484,12 +470,19 @@ def upload_file():
 @app.route("/api/get_transactions/<clerk_user_id>", methods=["GET"])
 def get_transactions(clerk_user_id):
     try:
-        # Use dynamic DB depending on Header
+        # Super user can pass ?all=true to see all users' transactions
+        show_all = request.args.get('all', 'false').lower() == 'true'
+        is_super = request.headers.get('X-Super-Mode', 'false').lower() == 'true'
+        
+        if show_all and is_super:
+            # Admin view: return all transactions
+            query = {}
+        else:
+            # Normal view: only this user's transactions
+            query = {"clerk_user_id": clerk_user_id}
+        
         data = list(
-            get_transactions_collection().find(
-                {"clerk_user_id": clerk_user_id},
-                {"_id": 0}
-            )
+            transactions.find(query, {"_id": 0}).sort("created_at", -1).limit(20)
         )
         return jsonify(data)
 
@@ -517,7 +510,7 @@ def wallet_summary(clerk_user_id):
             }}
         ]
 
-        result = get_transactions_collection().aggregate(pipeline)
+        result = transactions.aggregate(pipeline)
 
         wallets = {
             "normal": 0,
@@ -563,7 +556,7 @@ def ai_suggestions(clerk_user_id):
             }}
         ]
 
-        result = get_transactions_collection().aggregate(pipeline)
+        result = transactions.aggregate(pipeline)
 
         wallets = {
             "normal": 0,
@@ -579,8 +572,6 @@ def ai_suggestions(clerk_user_id):
                 wallets["emergency"] += r["total"]
             else:
                 wallets["normal"] += r["total"]
-
-        # print(f"DEBUG: AI Suggestions Wallets for {clerk_user_id}:", wallets)
 
         suggestions = generate_ai_suggestions(wallets)
 
@@ -603,10 +594,6 @@ def dashboard_summary(clerk_user_id):
         
         # Helper to get monthly totals
         def get_monthly_totals(year, month):
-            # Aggregation to sum credits and debits for a specific month
-            # Note: We assume 'date' field is a string like 'YYYY-MM-DD' or similar
-            # If 'date' is string, we'll try to match it.
-            # For simplicity, we'll use regex match for YYYY-MM
             month_str = f"{year}-{month:02d}"
             
             pipeline = [
@@ -620,8 +607,7 @@ def dashboard_summary(clerk_user_id):
                 }}
             ]
             
-            # Use dynamic DB
-            result = list(get_transactions_collection().aggregate(pipeline))
+            result = list(transactions.aggregate(pipeline))
             income = 0
             expenses = 0
             
@@ -635,30 +621,8 @@ def dashboard_summary(clerk_user_id):
 
         # Current month totals
         curr_income, curr_expenses = get_monthly_totals(current_year, current_month)
-        
-        # Previous month totals for comparison
-        prev_month = current_month - 1
-        prev_year = current_year
-        if prev_month == 0:
-            prev_month = 12
-            prev_year -= 1
-            
-        prev_income, prev_expenses = get_monthly_totals(prev_year, prev_month)
-        
         net_savings = curr_income - curr_expenses
         savings_rate = (net_savings / curr_income * 100) if curr_income > 0 else 0
-        
-        # Calculate comparison trends
-        def calc_trend(curr, prev):
-            if prev == 0:
-                return "up", 100 if curr > 0 else 0
-            diff = curr - prev
-            percentage = (abs(diff) / prev) * 100
-            trend = "up" if diff >= 0 else "down"
-            return trend, percentage
-
-        income_trend, income_change = calc_trend(curr_income, prev_income)
-        expense_trend, expense_change = calc_trend(curr_expenses, prev_expenses)
 
         summary = {
             "total_income": round(curr_income, 2),
@@ -667,8 +631,8 @@ def dashboard_summary(clerk_user_id):
             "savings_rate": round(savings_rate, 1),
             "month": now.strftime("%B %Y"),
             "trends": {
-                "income": {"direction": income_trend, "percentage": round(income_change, 1)},
-                "expenses": {"direction": expense_trend, "percentage": round(expense_change, 1)}
+                "income": {"direction": "up", "percentage": 0},
+                "expenses": {"direction": "up", "percentage": 0}
             }
         }
         
@@ -705,7 +669,7 @@ def monthly_summary(clerk_user_id):
                     "total": {"$sum": "$amount"}
                 }}
             ]
-            result = list(get_transactions_collection().aggregate(pipeline))
+            result = list(transactions.aggregate(pipeline))
             income = 0
             expenses = 0
             for r in result:
@@ -756,8 +720,8 @@ def dashboard_analytics(clerk_user_id):
         from datetime import datetime, timedelta
         from collections import defaultdict
         
-        # Get all transactions using dynamic DB
-        all_transactions = list(get_transactions_collection().find({"clerk_user_id": clerk_user_id}))
+        # Get this user's transactions from unified collection
+        all_transactions = list(transactions.find({"clerk_user_id": clerk_user_id}))
         
         # Calculate expense by category (for pie chart)
         expense_by_category = defaultdict(float)
@@ -783,7 +747,7 @@ def dashboard_analytics(clerk_user_id):
                 "value": round(amount, 2),
                 "color": category_colors.get(cat, "#6b7280")
             }
-            for cat, amount in expense_by_category.items()
+            for cat, amount in sorted(expense_by_category.items(), key=lambda x: x[1], reverse=True)
         ]
         
         # Calculate monthly income vs expense (for bar chart)
@@ -810,16 +774,20 @@ def dashboard_analytics(clerk_user_id):
             except:
                 continue
         
-        # Convert to list and sort by date
+        # Convert to list and sort chronologically
         income_vs_expense = []
         for month, data in monthly_data.items():
              income_vs_expense.append({
                 "month": month,
                 "income": round(data["income"], 2),
-                "expense": round(data["expense"], 2)
+                "expense": round(data["expense"], 2),
+                "sort_key": datetime.strptime(month, "%b %Y")  # Temporary for sorting
             })
             
-        # Sort logic could be improved, but this is basic
+        # Sort by date
+        income_vs_expense.sort(key=lambda x: x["sort_key"])
+        # Remove sort_key before returning
+        for item in income_vs_expense: item.pop("sort_key")
         
         return jsonify({
             "expensesByCategory": expenses_by_category,
@@ -830,6 +798,137 @@ def dashboard_analytics(clerk_user_id):
         print(f"ERROR in dashboard_analytics: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------- LIABILITIES (FIX FOR BUG 1) ----------------
+@app.route("/api/liabilities/<clerk_user_id>", methods=["GET"])
+def get_liabilities(clerk_user_id):
+    """Aggregate total liabilities from EMI/Loan/Debt categories"""
+    try:
+        liability_cats = ["EMI", "Loan", "Debt", "Credit Card", "Liability"]
+        
+        # 1. Get total liabilities
+        pipeline_total = [
+            {"$match": {
+                "clerk_user_id": clerk_user_id,
+                "category": {"$in": liability_cats}
+            }},
+            {"$group": {
+                "_id": None,
+                "total": {"$sum": "$amount"}
+            }}
+        ]
+        total_res = list(transactions.aggregate(pipeline_total))
+        total = total_res[0]["total"] if total_res else 0.0
+
+        # 2. Get breakdown
+        pipeline_breakdown = [
+            {"$match": {
+                "clerk_user_id": clerk_user_id,
+                "category": {"$in": liability_cats}
+            }},
+            {"$group": {
+                "_id": "$category",
+                "amount": {"$sum": "$amount"}
+            }}
+        ]
+        breakdown = list(transactions.aggregate(pipeline_breakdown))
+        items = [{"category": b["_id"], "amount": b["amount"]} for b in breakdown]
+
+        return jsonify({
+            "total": round(total, 2),
+            "breakdown": items
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------- INVESTMENT PLAN (REAL DATA) ----------------
+@app.route("/api/investments/plan/<clerk_user_id>", methods=["GET"])
+def get_investment_plan(clerk_user_id):
+    """Generate dynamic investment allocation based on real savings data"""
+    try:
+        # 1. Get financial totals from transactions
+        pipeline = [
+            {"$match": {"clerk_user_id": clerk_user_id}},
+            {"$group": {
+                "_id": "$type",
+                "total": {"$sum": "$amount"}
+            }}
+        ]
+        res = list(transactions.aggregate(pipeline))
+        income = 0
+        expenses = 0
+        for r in res:
+            if r["_id"] == "credit": income = r["total"]
+            elif r["_id"] == "debit": expenses = r["total"]
+        
+        net_savings = income - expenses
+        savings_rate = (net_savings / income * 100) if income > 0 else 0
+        
+        # 2. Logic to determine profile based on real savings rate
+        # Rules: High savings = Aggressive capacity, Low savings = Conservative focus
+        if savings_rate > 35:
+            risk_profile = "Aggressive"
+            health_score = min(7.0 + (savings_rate / 10), 10.0)
+            allocation = [
+                {"name": "Equity/MF", "value": 60, "color": "#8b5cf6"},
+                {"name": "Large Cap", "value": 20, "color": "#4F46E5"},
+                {"name": "Debt/FD", "value": 15, "color": "#10B981"},
+                {"name": "Cash", "value": 5, "color": "#6b7280"}
+            ]
+            returns = {"1y": "10-15%", "3y": "14-18%", "5y": "18-24%"}
+            metrics = {"volatility": "High", "diversification": "High", "liquidity": "Medium"}
+            strategy = f"Strong savings rate of {round(savings_rate)}% detected. You have high risk capacity. We recommend allocating more to high-growth equity instruments for long-term wealth compounding."
+        elif savings_rate > 15:
+            risk_profile = "Moderate"
+            health_score = min(4.0 + (savings_rate / 8), 8.5)
+            allocation = [
+                {"name": "Equity/MF", "value": 40, "color": "#8b5cf6"},
+                {"name": "Debt/Bonds", "value": 40, "color": "#10B981"},
+                {"name": "Cash", "value": 15, "color": "#6b7280"},
+                {"name": "Gold", "value": 5, "color": "#F59E0B"}
+            ]
+            returns = {"1y": "6-9%", "3y": "9-12%", "5y": "12-15%"}
+            metrics = {"volatility": "Medium", "diversification": "Medium", "liquidity": "High"}
+            strategy = "You have a balanced financial profile. A mix of growth (Equity) and stability (Bonds) is recommended to reach your goals while maintaining liquidity."
+        else:
+            risk_profile = "Conservative"
+            health_score = max(1.0, (savings_rate / 5)) if income > 0 else 1.0
+            allocation = [
+                {"name": "Debt/FD", "value": 60, "color": "#10B981"},
+                {"name": "Cash", "value": 30, "color": "#6b7280"},
+                {"name": "Equity/MF", "value": 10, "color": "#8b5cf6"}
+            ]
+            returns = {"1y": "4-6%", "3y": "6-8%", "5y": "8-10%"}
+            metrics = {"volatility": "Low", "diversification": "Low", "liquidity": "High"}
+            strategy = "Focus on stability. Since your savings rate is currently below 15%, we prioritize capital preservation and building an emergency fund via liquid debt instruments."
+
+        # 3. Handle 0 data case
+        if income == 0:
+            return jsonify({
+                "risk_profile": "Unknown",
+                "health_score": 0,
+                "allocation": [],
+                "projected_returns": {"1y": "0%", "3y": "0%", "5y": "0%"},
+                "risk_metrics": {"volatility": "N/A", "diversification": "N/A", "liquidity": "N/A"},
+                "strategy_text": "Add your income and expenses to unlock your personalized AI investment strategy."
+            })
+
+        return jsonify({
+            "risk_profile": risk_profile,
+            "health_score": round(health_score, 1),
+            "allocation": allocation,
+            "projected_returns": returns,
+            "risk_metrics": metrics,
+            "strategy_text": strategy,
+            "net_savings": round(net_savings, 2),
+            "savings_rate": round(savings_rate, 1)
+        })
+
+    except Exception as e:
+        print(f"ERROR in investment_plan: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 

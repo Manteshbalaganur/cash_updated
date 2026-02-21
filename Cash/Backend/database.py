@@ -4,21 +4,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Connect to MongoDB
+# Connect to MongoDB — SINGLE database for all users
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(MONGO_URI)
 
-# 1. Normal User Database
-normal_db = client["cashmate_normal"]
-normal_transactions = normal_db["transactions"]
-print('Normal DB connected:', normal_db.name)
+# One unified database
+db = client["cashmate"]
+transactions = db["transactions"]
 
-# 2. Super User Database
-super_db = client["cashmate_super"]
-super_transactions = super_db["transactions"]
-print('Super DB connected:', super_db.name)
+print(f'MongoDB connected: {db.name}')
+print(f'Transactions collection: {transactions.name}')
 
-# Maintain backward compatibility for existing routes (pointing to normal DB by default)
-db = normal_db
-transactions = normal_transactions
-print("Default 'transactions' collection mapped to 'cashmate_normal'")
+# ──────────────────────────────────────────
+# Data isolation is done by clerk_user_id field,
+# NOT by separate databases.
+#
+# Every document in 'transactions' has:
+#   clerk_user_id: "user_xxx"   ← who owns it
+#   date, description, amount, category, type, created_at
+#
+# Role (normal/super) only controls what the user
+# is ALLOWED TO SEE, not where data is stored.
+# ──────────────────────────────────────────

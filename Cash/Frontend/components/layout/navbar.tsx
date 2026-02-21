@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { UserButton, SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,6 +12,31 @@ export function Navbar() {
   const pathname = usePathname();
   const { user, isSuper } = useUser();
   const navItems = isSuper ? superNavItems : normalNavItems;
+
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-card px-6 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary-foreground">
+              <rect x="2" y="3" width="20" height="18" rx="2" />
+              <path d="M12 8v8" />
+              <path d="M8 12h8" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-foreground">CashMate</h1>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-card px-6 py-3">

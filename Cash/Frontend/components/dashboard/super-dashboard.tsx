@@ -92,10 +92,10 @@ export function SuperDashboard() {
       // 3. Fetch Analytics (Trend Chart)
       const analytics = await fetchWithAuth("/api/dashboard/analytics/{userId}", userId, {}, isSuper);
 
-      // --- CALCULATIONS ---
-
-      // Liabilities -> currently 0 as we don't track debt yet
-      const totalLiabilities = 0;
+      // 4. Fetch Liabilities (Debt)
+      const liabilitiesData = await fetchWithAuth("/api/liabilities/{userId}", userId, {}, isSuper);
+      const totalLiabilities = liabilitiesData.total || 0;
+      setLiabilities(liabilitiesData.breakdown || []);
 
       // Net Worth
       const netWorth = totalAssets - totalLiabilities;
@@ -272,15 +272,28 @@ export function SuperDashboard() {
           <h3 className="mb-5 text-lg font-semibold text-foreground">
             Liabilities Breakdown
           </h3>
-          {/* Empty State for now */}
-          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            <svg className="mb-3 h-10 w-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <p>No active liabilities detected.</p>
-            <p className="text-xs">Great job keeping debt low!</p>
-          </div>
+          {liabilities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+              <svg className="mb-3 h-10 w-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p>No active liabilities detected.</p>
+              <p className="text-xs">Great job keeping debt low!</p>
+            </div>
+          ) : (
+            <div className="mt-2 space-y-3">
+              {liabilities.map((item) => (
+                <div key={item.category} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-500" />
+                    <span className="text-sm font-medium text-foreground">{item.category}</span>
+                  </div>
+                  <span className="text-sm font-bold text-foreground">${item.amount.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <span className="font-semibold text-foreground">Total Liabilities</span>
-            <span className="text-lg font-bold text-foreground">$0.00</span>
+            <span className="text-lg font-bold text-red-500">${stats.find(s => s.label === "Total Liabilities")?.value.replace('$', '') || "0.00"}</span>
           </div>
         </div>
 
