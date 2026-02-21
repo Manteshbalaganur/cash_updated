@@ -281,6 +281,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useUser } from "@/lib/user-context";
 import { fetchWithAuth } from "@/lib/api-client";
@@ -308,7 +309,14 @@ const initialMessages: Message[] = [
 export default function AiAssistantPage() {
   const { userId } = useAuth();
   const { isSuper } = useUser();
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+
+  useEffect(() => {
+    if (isSuper) {
+      router.replace("/investment-planner");
+    }
+  }, [isSuper, router]);
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected" | "error">("disconnected");
@@ -322,8 +330,8 @@ export default function AiAssistantPage() {
   const wsUrl = "ws://localhost:8000/interact"; // Hardcode for now to test
   // in your chat page/component
 
-// const { userId } = useAuth();
-// const wsUrl = new WebSocket(`ws://localhost:8000/interact?user_id=${userId || 'anonymous'}`);
+  // const { userId } = useAuth();
+  // const wsUrl = new WebSocket(`ws://localhost:8000/interact?user_id=${userId || 'anonymous'}`);
 
   useEffect(() => {
     async function loadAiContext() {
@@ -360,7 +368,7 @@ export default function AiAssistantPage() {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return wsRef.current;
     }
-    
+
     if (wsRef.current?.readyState === WebSocket.CONNECTING) {
       return wsRef.current;
     }
@@ -373,7 +381,7 @@ export default function AiAssistantPage() {
 
     setConnectionStatus("connecting");
     console.log("Attempting to connect to:", wsUrl);
-    
+
     try {
       const ws = new WebSocket(wsUrl);
 
@@ -396,7 +404,7 @@ export default function AiAssistantPage() {
           try {
             const data = JSON.parse(event.data);
             content = data.content || data.text || data.message || data.reply || "";
-            
+
             // Check for done flag
             if (data.done || data.status === "complete") {
               isDone = true;
@@ -411,11 +419,11 @@ export default function AiAssistantPage() {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === currentMessageIdRef.current
-                ? { 
-                    ...msg, 
-                    content: msg.content + content, 
-                    isStreaming: !isDone 
-                  }
+                ? {
+                  ...msg,
+                  content: msg.content + content,
+                  isStreaming: !isDone
+                }
                 : msg
             )
           );
@@ -430,7 +438,7 @@ export default function AiAssistantPage() {
                 : msg
             )
           );
-          
+
           currentMessageIdRef.current = null;
           setIsProcessing(false);
         }
@@ -439,7 +447,7 @@ export default function AiAssistantPage() {
       ws.onerror = (err) => {
         console.error("❌ WS error:", err);
         setConnectionStatus("error");
-        
+
         // Show error in the UI
         if (currentMessageIdRef.current) {
           setMessages((prev) =>

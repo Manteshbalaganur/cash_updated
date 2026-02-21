@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Connect to MongoDB
-client = MongoClient("mongodb://localhost:27017/")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+client = MongoClient(MONGO_URI)
 
 # 1. Normal User Database
 normal_db = client["cashmate_normal"]

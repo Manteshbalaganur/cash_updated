@@ -19,8 +19,7 @@ export const normalNavItems: NavItem[] = [
 
 export const superNavItems: NavItem[] = [
   { label: "Dashboard", href: "/advanced" },
-  { label: "Wallets", href: "/wallets" },
-  { label: "AI Assistant", href: "/ai-assistant" },
+  { label: "Investment Planner", href: "/investment-planner" },
   { label: "Upload Data", href: "/upload-data" },
   { label: "Insights", href: "/insights" },
   { label: "Investments", href: "/investments" },
