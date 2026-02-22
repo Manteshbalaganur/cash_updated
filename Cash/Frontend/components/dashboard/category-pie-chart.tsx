@@ -44,7 +44,7 @@ export function CategoryPieChart({ data, loading }: CategoryPieChartProps) {
               borderRadius: "8px",
               fontSize: "12px",
             }}
-            formatter={(value: number) => [`$${value}`, ""]}
+            formatter={(value: number) => [`₹${value}`, ""]}
           />
           <Legend
             formatter={(value) => <span style={{ color: "hsl(224 30% 15%)", fontSize: "12px" }}>{value}</span>}

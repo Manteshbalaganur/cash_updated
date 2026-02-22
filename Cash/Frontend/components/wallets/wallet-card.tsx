@@ -37,7 +37,7 @@ export function WalletCard({ wallet }: WalletCardProps) {
 
       {/* Balance */}
       <p className="text-xs text-muted-foreground">Balance</p>
-      <p className="mb-4 text-3xl font-bold text-foreground">${wallet.balance.toLocaleString()}</p>
+      <p className="mb-4 text-3xl font-bold text-foreground">₹{wallet.balance.toLocaleString()}</p>
 
       {/* Actions */}
       <div className="mt-auto flex flex-col gap-2">

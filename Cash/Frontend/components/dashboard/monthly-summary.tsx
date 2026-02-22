@@ -14,9 +14,9 @@ export function MonthlySummary({ data, loading }: MonthlySummaryProps) {
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const summaryItems = [
-    { label: "Total Income", value: `$${(data?.income || 0).toLocaleString()}`, color: "text-blue-300" },
-    { label: "Total Expenses", value: `$${(data?.expense || 0).toLocaleString()}`, color: "text-orange-300" },
-    { label: "Net Savings", value: `$${(data?.net || 0).toLocaleString()}`, color: "text-green-300" },
+    { label: "Total Income", value: `₹${(data?.income || 0).toLocaleString()}`, color: "text-blue-300" },
+    { label: "Total Expenses", value: `₹${(data?.expense || 0).toLocaleString()}`, color: "text-orange-300" },
+    { label: "Net Savings", value: `₹${(data?.net || 0).toLocaleString()}`, color: "text-green-300" },
   ];
 
   if (loading) {

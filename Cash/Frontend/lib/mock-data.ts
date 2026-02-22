@@ -48,22 +48,22 @@ export interface StatCard {
 export const normalUserStats: StatCard[] = [
   {
     label: "Total Balance",
-    value: "$45,230.5",
+    value: "₹45,230.5",
     change: "+5.2%",
     changeType: "positive",
-    icon: "dollar",
+    icon: "rupee",
     iconBg: "bg-blue-500",
   },
   {
     label: "Monthly Income",
-    value: "$8,500",
+    value: "₹8,500",
     change: "Steady income stream",
     icon: "trending-up",
     iconBg: "bg-green-500",
   },
   {
     label: "Monthly Expenses",
-    value: "$5,420.3",
+    value: "₹5,420.3",
     change: "-2.1%",
     changeType: "negative",
     icon: "expense",
@@ -83,14 +83,14 @@ export const normalUserStats: StatCard[] = [
 export const superUserStats: StatCard[] = [
   {
     label: "Net Worth",
-    value: "$285,400",
+    value: "₹285,400",
     change: "Liabilities",
     icon: "net-worth",
     iconBg: "bg-blue-600",
   },
   {
     label: "Total Assets",
-    value: "$325,400",
+    value: "₹325,400",
     change: "+5% this quarter",
     changeType: "positive",
     icon: "assets",
@@ -98,7 +98,7 @@ export const superUserStats: StatCard[] = [
   },
   {
     label: "Total Liabilities",
-    value: "$40,000",
+    value: "₹40,000",
     change: "-8.3% this quarter",
     changeType: "negative",
     icon: "liabilities",

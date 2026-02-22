@@ -110,19 +110,19 @@ export function SuperDashboard() {
       setStats([
         {
           label: "Net Worth",
-          value: `$${netWorth.toLocaleString()}`,
+          value: `₹${netWorth.toLocaleString()}`,
           change: "Total Equity",
           changeType: "neutral",
         },
         {
           label: "Total Assets",
-          value: `$${totalAssets.toLocaleString()}`,
+          value: `₹${totalAssets.toLocaleString()}`,
           change: "Liquid & Invested",
           changeType: "positive",
         },
         {
           label: "Total Liabilities",
-          value: `$${totalLiabilities.toLocaleString()}`,
+          value: `₹${totalLiabilities.toLocaleString()}`,
           change: "No active debts",
           changeType: "positive",
         },
@@ -245,7 +245,7 @@ export function SuperDashboard() {
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, ""]} />
+                <Tooltip formatter={(value: number) => [`₹${value.toLocaleString()}`, ""]} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -258,7 +258,7 @@ export function SuperDashboard() {
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
                   {item.name}
                 </div>
-                <span className="font-medium text-foreground">${item.value.toLocaleString()}</span>
+                <span className="font-medium text-foreground">₹{item.value.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -286,14 +286,14 @@ export function SuperDashboard() {
                     <span className="h-2 w-2 rounded-full bg-red-500" />
                     <span className="text-sm font-medium text-foreground">{item.category}</span>
                   </div>
-                  <span className="text-sm font-bold text-foreground">${item.amount.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-foreground">₹{item.amount.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           )}
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <span className="font-semibold text-foreground">Total Liabilities</span>
-            <span className="text-lg font-bold text-red-500">${stats.find(s => s.label === "Total Liabilities")?.value.replace('$', '') || "0.00"}</span>
+            <span className="text-lg font-bold text-red-500">₹{stats.find(s => s.label === "Total Liabilities")?.value.replace('₹', '') || "0.00"}</span>
           </div>
         </div>
 
