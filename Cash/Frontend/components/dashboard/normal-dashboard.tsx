@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-import { DollarIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
+import { RupeeIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
 import { IncomeExpenseChart } from "./income-expense-chart";
 import { CategoryPieChart } from "./category-pie-chart";
 import { MonthlySummary } from "./monthly-summary";
@@ -13,7 +13,7 @@ import { fetchWithAuth } from "@/lib/api-client";
 import { toast } from "sonner";
 
 const iconMap: Record<string, React.ReactNode> = {
-  dollar: <DollarIcon />,
+  rupee: <RupeeIcon />,
   "trending-up": <TrendingUpIcon />,
   expense: <ExpenseIcon />,
   savings: <SavingsIcon />,
@@ -41,19 +41,19 @@ export function NormalDashboard() {
       setStats([
         {
           label: "Net Savings (Total)", // or Total Balance if you prefer
-          value: `$${(summary.net_savings || 0).toLocaleString()}`,
-          icon: "dollar",
+          value: `₹${(summary.net_savings || 0).toLocaleString()}`,
+          icon: "rupee",
           iconBg: "bg-blue-500",
         },
         {
           label: "Monthly Income",
-          value: `$${(summary.total_income || 0).toLocaleString()}`,
+          value: `₹${(summary.total_income || 0).toLocaleString()}`,
           icon: "trending-up",
           iconBg: "bg-green-500",
         },
         {
           label: "Monthly Expenses",
-          value: `$${(summary.total_expenses || 0).toLocaleString()}`,
+          value: `₹${(summary.total_expenses || 0).toLocaleString()}`,
           icon: "expense",
           iconBg: "bg-red-500",
         },
@@ -115,7 +115,7 @@ export function NormalDashboard() {
               key={stat.label}
               label={stat.label}
               value={stat.value}
-              icon={iconMap[stat.icon] || <DollarIcon />}
+              icon={iconMap[stat.icon] || <RupeeIcon />}
               iconBg={stat.iconBg}
             />
           ))

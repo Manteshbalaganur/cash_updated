@@ -224,7 +224,7 @@ export function ManualEntryPanel({ entries, onAddEntry }: ManualEntryPanelProps)
                 className={`text-sm font-semibold ${entry.type === "expense" ? "text-red-500" : "text-green-500"
                   }`}
               >
-                {entry.type === "expense" ? "-" : "+"}${entry.amount}
+                {entry.type === "expense" ? "-" : "+"}₹{entry.amount}
               </span>
             </div>
           ))}

@@ -5,12 +5,12 @@ import { useAuth } from "@clerk/nextjs";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-import { DollarIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
+import { RupeeIcon, TrendingUpIcon, ExpenseIcon, SavingsIcon } from "@/components/shared/stat-icons";
 import { fetchWithAuth } from "@/lib/api-client";
 import { toast } from "sonner";
 
 const iconMap: Record<string, React.ReactNode> = {
-  dollar: <DollarIcon />,
+  rupee: <RupeeIcon />,
   "trending-up": <TrendingUpIcon />,
   expense: <ExpenseIcon />,
   savings: <SavingsIcon />,
@@ -64,19 +64,19 @@ export default function InsightsPage() {
       setStats([
         {
           label: "Total Balance",
-          value: `$${totalBalance.toLocaleString()}`,
-          icon: "dollar",
+          value: `₹${totalBalance.toLocaleString()}`,
+          icon: "rupee",
           iconBg: "bg-blue-500",
         },
         {
           label: "Monthly Income",
-          value: `$${(summaryData.monthly_income || 0).toLocaleString()}`,
+          value: `₹${(summaryData.monthly_income || 0).toLocaleString()}`,
           icon: "trending-up",
           iconBg: "bg-green-500",
         },
         {
           label: "Monthly Expenses",
-          value: `$${(summaryData.monthly_expenses || 0).toLocaleString()}`,
+          value: `₹${(summaryData.monthly_expenses || 0).toLocaleString()}`,
           icon: "expense",
           iconBg: "bg-red-500",
         },
@@ -143,7 +143,7 @@ export default function InsightsPage() {
               key={stat.label}
               label={stat.label}
               value={stat.value}
-              icon={iconMap[stat.icon] || <DollarIcon />}
+              icon={iconMap[stat.icon] || <RupeeIcon />}
               iconBg={stat.iconBg}
             />
           ))
@@ -187,15 +187,15 @@ export default function InsightsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-lg border-l-4 border-blue-500 bg-blue-50 p-4">
               <p className="text-sm font-medium text-blue-600">Total Income</p>
-              <p className="text-2xl font-bold text-foreground">${(summary?.income || 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">₹{(summary?.income || 0).toLocaleString()}</p>
             </div>
             <div className="rounded-lg border-l-4 border-orange-500 bg-orange-50 p-4">
               <p className="text-sm font-medium text-orange-600">Total Expenses</p>
-              <p className="text-2xl font-bold text-foreground">${(summary?.expense || 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">₹{(summary?.expense || 0).toLocaleString()}</p>
             </div>
             <div className="rounded-lg border-l-4 border-green-500 bg-green-50 p-4">
               <p className="text-sm font-medium text-green-600">Net Savings</p>
-              <p className="text-2xl font-bold text-foreground">${(summary?.net || 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">₹{(summary?.net || 0).toLocaleString()}</p>
             </div>
           </div>
         )}
@@ -220,7 +220,7 @@ export default function InsightsPage() {
                       <span className="text-sm text-foreground">{cat.name}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="font-semibold text-foreground">${cat.value.toLocaleString()}</span>
+                      <span className="font-semibold text-foreground">₹{cat.value.toLocaleString()}</span>
                       <span className="text-muted-foreground">({cat.percentage}%)</span>
                     </div>
                   </div>
@@ -250,7 +250,7 @@ export default function InsightsPage() {
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-semibold ${tx.type === "income" || tx.type === "credit" ? "text-green-600" : "text-red-500"}`}>
-                      {tx.type === "income" || tx.type === "credit" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
+                      {tx.type === "income" || tx.type === "credit" ? "+" : "-"}₹{Math.abs(tx.amount).toFixed(2)}
                     </p>
                     <p className="text-xs text-muted-foreground">{tx.category}</p>
                   </div>
